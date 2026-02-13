@@ -1,0 +1,26 @@
+spring:
+  datasource:
+    url: jdbc:h2:mem:testdb
+    driver-class-name: org.h2.Driver
+    username: sa
+    password: "test"
+  jpa:
+    hibernate:
+      ddl-auto: create-drop
+    show-sql: false
+  sql:
+    init:
+      mode: never
+  ai:
+    openai:
+      api-key: test-key
+      chat:
+        api-key: test-key
+        options:
+          model: gpt-4o-mini
+      embedding:
+        api-key: test-key
+    vectorstore:
+      qdrant:
+        host: localhost
+        collection-name: owners_manual_rag_test

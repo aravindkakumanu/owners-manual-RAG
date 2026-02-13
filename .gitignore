@@ -1,0 +1,15 @@
+# Ignore Maven build output
+target/
+
+# Ignore local Maven repository (if it's somehow in your project)
+.m2/
+
+# Ignore IDE settings
+.settings/
+.classpath
+.project
+*.iml
+
+.env
+
+.DS_Store

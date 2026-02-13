@@ -1,0 +1,53 @@
+spring:
+  application:
+    name: OwnerManualRAG
+
+  ai:
+    openai:
+        api-key: ${OPENAI_API_KEY}
+
+        chat:
+          # Default empty (:) so when GROQ_* are unset we get "" and @NotBlank fails fast with a clear message
+          api-key: ${GROQ_API_KEY:}
+          base-url: https://api.groq.com/openai 
+          options:
+            model: ${GROQ_MODEL:}  
+            max-tokens: 1024
+            temperature: 0.1 
+            
+        embedding:
+          api-key: ${OPENAI_API_KEY:}
+          options:
+            model: text-embedding-3-small
+            dimensions: 384
+
+    vectorstore:
+      qdrant:
+        host: ${QDRANT_URL:}  # localhost if using Qdrant locally
+        port: 6334              # The gRPC port (default is 6334)
+        api-key: ${QDRANT_API_KEY:} # required for Qdrant Cloud; can be empty for local
+        use-tls: true          # Set to true if using Qdrant Cloud
+        initialize-schema: true # Automatically creates the collection if it doesn't exist
+        collection-name: owners_manual_rag
+
+
+  datasource:
+    url: ${SUPABASE_DB_URL:}
+    username: ${SUPABASE_DB_USERNAME:}
+    password: ${SUPABASE_DB_PASSWORD:}
+
+  jpa:
+    hibernate:
+      ddl-auto: update
+    show-sql: true
+
+
+
+management:
+  endpoints:
+    web:
+      exposure:
+        include: health
+  endpoint:
+    health:
+      show-details: always 
