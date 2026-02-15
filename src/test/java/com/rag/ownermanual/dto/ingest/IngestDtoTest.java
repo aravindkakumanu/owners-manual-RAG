@@ -16,22 +16,6 @@ import java.util.UUID;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
-/**
- * Verifies ingest and job API DTOs for Phase 1 Step 6 exit criteria: a controller (or test) can
- * bind and validate IngestRequest, and IngestResponse / JobStatusResponse are JSON-serializable.
- *
- * <p><b>What each group tests:</b> Method names describe the scenario (e.g. blankManualId_failsValidation).
- * IngestRequestValidation: Bean Validation rules. ResponseSerialization: JSON round-trip so we know
- * the contract works when a real controller returns these types.
- *
- * <p><b>Why these tests:</b>
- * <ul>
- *   <li><b>IngestRequest validation:</b> Proves Bean Validation runs (required manual_id and
- *       documentUrl, max lengths). Invalid requests will get 400 when controller uses @Valid.</li>
- *   <li><b>IngestResponse / JobStatusResponse:</b> Proves we can build responses and serialize
- *       to JSON (UUID and enum serialize correctly; optional fields omitted when null).</li>
- * </ul>
- */
 class IngestDtoTest {
 
     private static final Validator VALIDATOR = Validation.buildDefaultValidatorFactory().getValidator();
