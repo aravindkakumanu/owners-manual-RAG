@@ -1,15 +1,48 @@
-# Ignore Maven build output
-target/
 
-# Ignore local Maven repository (if it's somehow in your project)
-.m2/
-
-# Ignore IDE settings
 .settings/
 .classpath
 .project
 *.iml
 
+HELP.md
+target/
+.mvn/wrapper/maven-wrapper.jar
+!**/src/main/**/target/
+!**/src/test/**/target/
+.m2/
+
+### STS ###
+.apt_generated
+.classpath
+.factorypath
+.project
+.settings
+.springBeans
+.sts4-cache
+
+### IntelliJ IDEA ###
+.idea
+*.iws
+*.iml
+*.ipr
+
+### NetBeans ###
+/nbproject/private/
+/nbbuild/
+/dist/
+/nbdist/
+/.nb-gradle/
+build/
+!**/src/main/**/build/
+!**/src/test/**/build/
+
+### VS Code ###
+.vscode/
+
+### Env and secrets (do not commit) ###
 .env
+.env.local
+
 
 .DS_Store
+**/.DS_Store
