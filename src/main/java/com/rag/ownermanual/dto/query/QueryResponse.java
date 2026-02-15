@@ -1,5 +1,7 @@
 package com.rag.ownermanual.dto.query;
 
+import io.swagger.v3.oas.annotations.media.Schema;
+
 import java.util.List;
 
 /**
@@ -7,8 +9,11 @@ import java.util.List;
  * @param answer    Generated answer text (grounded in retrieved chunks).
  * @param citations List of citations (chunk refs used to generate the answer). Never null; may be empty.
  */
+@Schema(description = "Response body for POST /api/v1/query: generated answer and citations.")
 public record QueryResponse(
+        @Schema(description = "Generated answer text (grounded in retrieved chunks)")
         String answer,
+        @Schema(description = "List of citations (chunk refs used to generate the answer). Never null; may be empty.", requiredMode = Schema.RequiredMode.REQUIRED)
         List<Citation> citations
 ) {
     public QueryResponse {
