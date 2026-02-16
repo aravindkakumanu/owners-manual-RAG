@@ -1,0 +1,191 @@
+# Owner's Manual RAG API — OpenAPI 3.0
+# Canonical contract for implementation. Aligned with DTOs in
+# com.rag.ownermanual.dto.query and com.rag.ownermanual.dto.ingest.
+openapi: 3.0.3
+info:
+  title: Owner's Manual RAG API
+  version: 1.0.0
+  description: |
+    Query and ingest endpoints for the Owner's Manual RAG service.
+    - POST /api/v1/query — submit a question; returns answer with citations.
+    - POST /api/v1/ingest — submit a document URL; returns job_id for status polling.
+    - GET /api/v1/jobs/{id} — get ingestion job status.
+
+servers:
+  - url: /api/v1
+    description: API base path (prefixed to paths below)
+
+paths:
+  /query:
+    post:
+      summary: Query the RAG
+      description: Submit a question; returns a generated answer and citations from the manual.
+      operationId: query
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/QueryRequest'
+      responses:
+        '200':
+          description: Success; answer and citations (citations may be empty list).
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/QueryResponse'
+        '400':
+          description: Validation error (e.g. blank text, text exceeds 8192 chars).
+
+  /ingest:
+    post:
+      summary: Ingest a document
+      description: Submit a manual_id and document URL; returns job_id. Poll GET /jobs/{id} for status.
+      operationId: ingest
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/IngestRequest'
+      responses:
+        '200':
+          description: Ingest job created; use jobId to poll status.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/IngestResponse'
+        '400':
+          description: Validation error (e.g. blank manual_id or documentUrl).
+
+  /jobs/{id}:
+    get:
+      summary: Get job status
+      description: Returns current status of an ingestion job (CREATED, PROCESSING, COMPLETED, FAILED).
+      operationId: getJobStatus
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+          description: Job UUID returned from POST /ingest.
+      responses:
+        '200':
+          description: Job status and optional error_message, created_at, updated_at.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/JobStatusResponse'
+        '404':
+          description: Job not found.
+
+components:
+  schemas:
+    QueryRequest:
+      type: object
+      required:
+        - text
+      properties:
+        text:
+          type: string
+          description: User question (required).
+          maxLength: 8192
+        vehicleModel:
+          type: string
+          description: Optional vehicle/model to scope the search.
+          maxLength: 255
+        imageUrl:
+          type: string
+          description: Optional URL of an image (future vision/multimodal).
+          maxLength: 2048
+        imageBase64:
+          type: string
+          description: Optional base64-encoded image data.
+
+    QueryResponse:
+      type: object
+      required:
+        - citations
+      properties:
+        answer:
+          type: string
+          description: Generated answer text (grounded in retrieved chunks).
+        citations:
+          type: array
+          description: List of citations; never null; may be empty.
+          items:
+            $ref: '#/components/schemas/Citation'
+
+    Citation:
+      type: object
+      required:
+        - chunkId
+      properties:
+        chunkId:
+          type: string
+          description: Identifier of the chunk (required).
+        section:
+          type: string
+          description: Optional heading/section title from the source manual.
+        snippet:
+          type: string
+          description: Optional short excerpt of the chunk text for display.
+        page:
+          type: integer
+          description: Optional page number in the source PDF.
+
+    IngestRequest:
+      type: object
+      required:
+        - manualId
+        - documentUrl
+      properties:
+        manualId:
+          type: string
+          description: Identifier of the manual to ingest into (required).
+          maxLength: 255
+        documentUrl:
+          type: string
+          description: URL of the document to ingest (e.g. PDF).
+          maxLength: 2048
+
+    IngestResponse:
+      type: object
+      required:
+        - jobId
+      properties:
+        jobId:
+          type: string
+          format: uuid
+          description: UUID of the created ingestion job; use for GET /jobs/{id}.
+
+    JobStatusResponse:
+      type: object
+      required:
+        - jobId
+        - status
+      properties:
+        jobId:
+          type: string
+          format: uuid
+          description: Job identifier (same as path parameter).
+        status:
+          type: string
+          enum: [CREATED, PROCESSING, COMPLETED, FAILED]
+          description: Current job status.
+        errorMessage:
+          type: string
+          nullable: true
+          description: Present when status is FAILED; null otherwise.
+        createdAt:
+          type: string
+          format: date-time
+          nullable: true
+          description: When the job was created (ISO-8601).
+        updatedAt:
+          type: string
+          format: date-time
+          nullable: true
+          description: When the job was last updated (ISO-8601).
