@@ -19,7 +19,7 @@ class RepositoryContractTest {
         // Stub: no real embedding or Qdrant; just satisfies the interface.
         VectorStoreRepository repo = new VectorStoreRepository() {
             @Override
-            public List<Chunk> search(float[] queryVector, String vehicleModel, int topK) {
+            public List<Chunk> search(String queryText, String vehicleModel, int topK) {
                 return List.of();
             }
 
@@ -29,7 +29,7 @@ class RepositoryContractTest {
             }
         };
 
-        List<Chunk> result = repo.search(new float[384], "Model-X", 5);
+        List<Chunk> result = repo.search("How do I change the oil?", "Model-X", 5);
         assertThat(result).isEmpty();
         repo.upsertChunks(List.of());
     }
