@@ -11,13 +11,14 @@ import java.util.List;
 public interface VectorStoreRepository {
 
     /**
-     * Search the vector store by query embedding and optional vehicle filter.
-     * @param queryVector  Embedding of the user query (dimension must match store, e.g. 384).
+     * Search the vector store by query text and optional vehicle filter.
+     * The implementation embeds the query and returns the top-k similar chunks.
+     * @param queryText    User query text (will be embedded by the implementation).
      * @param vehicleModel Filter by vehicle/model; null or blank = no filter.
      * @param topK         Maximum number of chunks to return.
      * @return List of chunks ordered by similarity (nearest first); never null, may be empty.
      */
-    List<Chunk> search(float[] queryVector, String vehicleModel, int topK);
+    List<Chunk> search(String queryText, String vehicleModel, int topK);
 
     /**
      * Insert or replace chunks in the vector store. Each chunk is embedded and stored with payload.
