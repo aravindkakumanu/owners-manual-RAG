@@ -8,12 +8,23 @@ import org.springframework.ai.vectorstore.SearchRequest;
 import org.springframework.ai.vectorstore.VectorStore;
 import org.springframework.ai.vectorstore.filter.Filter;
 
+import java.nio.charset.StandardCharsets;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
+import java.util.UUID;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
+/**
+ * Unit tests for {@link QdrantVectorStoreRepository}: Chunk ↔ Document mapping,
+ * search with optional vehicle_model filter, and upsert behavior.
+ *
+ * <p>Uses a manual {@link StubVectorStore} instead of Mockito so we can assert exact
+ * {@link SearchRequest} shape and added documents without relying on the inline mock maker
+ * (which can fail in some JDK/CI environments). The stub records the last search request
+ * and all added documents for verification.
+ */
 class QdrantVectorStoreRepositoryTest {
 
     private StubVectorStore stubVectorStore;
@@ -97,7 +108,7 @@ class QdrantVectorStoreRepositoryTest {
 
         assertThat(stubVectorStore.addedDocuments).hasSize(1);
         Document doc = stubVectorStore.addedDocuments.get(0);
-        assertThat(doc.getId()).isEqualTo("chunk-99");
+        assertThat(doc.getId()).isEqualTo(UUID.nameUUIDFromBytes("chunk-99".getBytes(StandardCharsets.UTF_8)).toString());
         assertThat(doc.getText()).isEqualTo("Check coolant level monthly.");
         assertThat(doc.getMetadata())
                 .containsEntry("chunk_id", "chunk-99")
@@ -121,6 +132,7 @@ class QdrantVectorStoreRepositoryTest {
         repository.upsertChunks(List.of(chunk));
 
         Document doc = stubVectorStore.addedDocuments.get(0);
+        assertThat(doc.getId()).isEqualTo(UUID.nameUUIDFromBytes("chunk-minimal".getBytes(StandardCharsets.UTF_8)).toString());
         assertThat(doc.getMetadata())
                 .containsEntry("chunk_id", "chunk-minimal")
                 .containsEntry("manual_id", "manual-1")
@@ -136,6 +148,11 @@ class QdrantVectorStoreRepositoryTest {
         assertThat(stubVectorStore.addedDocuments).isEmpty();
     }
 
+    /**
+     * Stub VectorStore: records the last {@link SearchRequest} and all documents passed to
+     * {@link #add(List)} so tests can assert request shape (query, topK, filter) and
+     * Chunk→Document mapping (id, text, metadata keys).
+     */
     private static final class StubVectorStore implements VectorStore {
         SearchRequest lastSearchRequest;
         List<Document> searchResults = List.of();
