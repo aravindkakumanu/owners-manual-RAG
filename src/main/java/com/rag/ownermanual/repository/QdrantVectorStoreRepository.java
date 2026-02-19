@@ -9,9 +9,11 @@ import org.springframework.ai.vectorstore.VectorStore;
 import org.springframework.ai.vectorstore.filter.FilterExpressionBuilder;
 import org.springframework.stereotype.Component;
 
+import java.nio.charset.StandardCharsets;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.UUID;
 
 /**
  * Vector store repository implementation using Spring AI's Qdrant VectorStore.
@@ -63,7 +65,8 @@ public class QdrantVectorStoreRepository implements VectorStoreRepository {
     }
 
     /**
-     * Converts chunks to Documents (id = chunk.id()), calls VectorStore.add() so the store embeds and stores them.
+     * Converts chunks to Documents (id = chunk.id()), calls VectorStore.add() so the
+     * store embeds and stores them.
      */
     @Override
     public void upsertChunks(List<Chunk> chunks) {
@@ -89,8 +92,11 @@ public class QdrantVectorStoreRepository implements VectorStoreRepository {
         String section = getString(m, META_SECTION);
         Integer page = getInteger(m, META_PAGE);
 
-        // Required Chunk fields cannot be null/blank; use placeholders for bad or legacy payloads.
-        String id = doc.getId() != null && !doc.getId().isBlank() ? doc.getId() : getString(m, META_CHUNK_ID);
+        // Use chunk_id from metadata as domain id; document id is internal UUID for Spring AI Qdrant.
+        String id = getString(m, META_CHUNK_ID);
+        if (id == null || id.isBlank()) {
+            id = doc.getId() != null && !doc.getId().isBlank() ? doc.getId() : null;
+        }
         if (id == null || id.isBlank()) {
             id = "unknown";
         }
@@ -112,8 +118,8 @@ public class QdrantVectorStoreRepository implements VectorStoreRepository {
     }
 
     /**
-     * Maps a Chunk to Spring AI Document (id = chunk.id(), content = chunk.text(),
-     * metadata = chunk_id, manual_id, vehicle_model, section if set, page if set).
+     * Maps a Chunk to Spring AI Document. Document id is a deterministic UUID from chunk.id()
+     * (Spring AI Qdrant requires UUID); metadata holds chunk_id so we map back to domain id on read.
      */
     private Document chunkToDocument(Chunk chunk) {
         Map<String, Object> metadata = new HashMap<>();
@@ -127,7 +133,8 @@ public class QdrantVectorStoreRepository implements VectorStoreRepository {
             metadata.put(META_PAGE, chunk.page());
         }
 
-        return new Document(chunk.id(), chunk.text(), metadata);
+        UUID documentId = UUID.nameUUIDFromBytes(chunk.id().getBytes(StandardCharsets.UTF_8));
+        return new Document(documentId.toString(), chunk.text(), metadata);
     }
 
     /** Returns metadata value as string because Qdrant/store may return different value types. */
