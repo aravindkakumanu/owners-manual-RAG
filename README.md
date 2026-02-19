@@ -117,5 +117,3 @@ You should see `"status": "UP"` and components (qdrant, embedding, chat, db) UP.
 ## Health Checks
 The application exposes health endpoints via Spring Boot Actuator:
 - `/actuator/health` - Overall application health (includes Qdrant, embedding, LLM, and Postgres connectivity)
-
-
