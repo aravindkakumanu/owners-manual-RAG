@@ -13,14 +13,19 @@ spring:
       mode: never
   ai:
     openai:
-      api-key: test-key
+      # Use env when set; else test-key for unit tests that skip real calls
+      api-key: ${OPENAI_API_KEY:test-key}
       chat:
-        api-key: test-key
+        api-key: ${GROQ_API_KEY:test-key}
         options:
           model: gpt-4o-mini
       embedding:
-        api-key: test-key
+        api-key: ${OPENAI_API_KEY:test-key}
     vectorstore:
       qdrant:
-        host: localhost
+        host: ${QDRANT_URL:localhost}
+        port: 6334
+        use-tls: ${QDRANT_USE_TLS:false}
+        api-key: ${QDRANT_API_KEY:}
+        initialize-schema: true
         collection-name: owners_manual_rag_test
