@@ -42,6 +42,9 @@ spring:
     show-sql: true
 
 
+app:
+  query:
+    top-k: 5   
 
 management:
   endpoints:

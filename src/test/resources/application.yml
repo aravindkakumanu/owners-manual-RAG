@@ -29,3 +29,7 @@ spring:
         api-key: ${QDRANT_API_KEY:}
         initialize-schema: true
         collection-name: owners_manual_rag_test
+
+app:
+  query:
+    top-k: 5        
