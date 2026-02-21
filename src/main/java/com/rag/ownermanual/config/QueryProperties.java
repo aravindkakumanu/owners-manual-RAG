@@ -15,6 +15,10 @@ public class QueryProperties {
 
     private Double similarityThreshold;
 
+    @Min(500)
+    @Max(100_000)
+    private int maxContextChars = 8_000; // Maximum total character length of chunk texts sent to the LLM (context window).
+
     public int getTopK() {
         return topK;
     }
@@ -29,5 +33,13 @@ public class QueryProperties {
 
     public void setSimilarityThreshold(Double similarityThreshold) {
         this.similarityThreshold = similarityThreshold;
+    }
+
+    public int getMaxContextChars() {
+        return maxContextChars;
+    }
+
+    public void setMaxContextChars(int maxContextChars) {
+        this.maxContextChars = maxContextChars;
     }
 }
