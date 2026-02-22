@@ -13,7 +13,7 @@ spring:
           options:
             model: ${GROQ_MODEL:}  
             max-tokens: 1024
-            temperature: 0.1 
+            temperature: 0.1
             
         embedding:
           api-key: ${OPENAI_API_KEY:}
@@ -38,13 +38,14 @@ spring:
 
   jpa:
     hibernate:
-      ddl-auto: update
+      ddl-auto: validate
     show-sql: true
 
 
 app:
   query:
-    top-k: 5   
+    top-k: 5
+    max-context-chars: 8000  # Cap total chunk text sent to LLM (context window)
 
 management:
   endpoints:
@@ -53,4 +54,4 @@ management:
         include: health
   endpoint:
     health:
-      show-details: always 
+      show-details: always
