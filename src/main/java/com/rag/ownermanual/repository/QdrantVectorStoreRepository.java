@@ -53,6 +53,7 @@ public class QdrantVectorStoreRepository implements VectorStoreRepository {
                 .topK(topK);
 
         // Only apply vehicle_model filter when caller specified one; null/blank = search all models.
+        // Qdrant requires a payload index for any field used in a filter.
         if (vehicleModel != null && !vehicleModel.isBlank()) {
             var filter = new FilterExpressionBuilder().eq(META_VEHICLE_MODEL, vehicleModel).build();
             requestBuilder.filterExpression(filter);
