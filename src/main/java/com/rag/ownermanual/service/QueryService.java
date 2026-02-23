@@ -4,6 +4,8 @@ import com.rag.ownermanual.config.QueryProperties;
 import com.rag.ownermanual.domain.Chunk;
 import com.rag.ownermanual.dto.query.Citation;
 import com.rag.ownermanual.dto.query.QueryResponse;
+import com.rag.ownermanual.exception.DownstreamLlmException;
+import com.rag.ownermanual.exception.DownstreamVectorStoreException;
 import com.rag.ownermanual.repository.VectorStoreRepository;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -15,7 +17,7 @@ import java.util.List;
 import java.util.Objects;
 
 /**
- * Orchestrates the read path: search → LLM → answer with citations.
+ * Orchestrates the read path: embed → search → LLM → answer with citations.
  */
 @Service
 public class QueryService {
@@ -54,7 +56,13 @@ public class QueryService {
         // Normalize blank to null so the repository contract is clear: null/blank = no filter.
         String normalizedModel = (vehicleModel != null && !vehicleModel.isBlank()) ? vehicleModel : null;
         int topK = queryProperties.getTopK();
-        return vectorStoreRepository.search(queryText, normalizedModel, topK);
+        try {
+            return vectorStoreRepository.search(queryText, normalizedModel, topK);
+        } catch (RuntimeException ex) {
+            log.error("Vector store search failed. query='{}', vehicleModel='{}'.",
+                    maskForLog(queryText), normalizedModel, ex);
+            throw new DownstreamVectorStoreException("Vector store search failed", ex);
+        }
     }
 
     /**
@@ -79,11 +87,18 @@ public class QueryService {
         List<Chunk> included = truncateToContextLimit(chunks, queryProperties.getMaxContextChars());
         String userContent = buildUserMessage(queryText, included);
 
-        String answer = chatClient.prompt()
-                .system(s -> s.text(SYSTEM_INSTRUCTION))
-                .user(userContent)
-                .call()
-                .content();
+        String answer;
+        try {
+            answer = chatClient.prompt()
+                    .system(s -> s.text(SYSTEM_INSTRUCTION))
+                    .user(userContent)
+                    .call()
+                    .content();
+        } catch (RuntimeException ex) {
+            log.error("LLM answer generation failed. query='{}', includedChunks={}.",
+                    maskForLog(queryText), included.size(), ex);
+            throw new DownstreamLlmException("LLM answer generation failed", ex);
+        }
 
         // Citations = one per chunk we sent to the LLM; enables "which sections supported this answer?"
         List<Citation> citations = buildCitations(included);

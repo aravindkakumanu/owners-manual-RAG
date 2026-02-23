@@ -17,6 +17,7 @@ spring:
       api-key: ${OPENAI_API_KEY:test-key}
       chat:
         api-key: ${GROQ_API_KEY:test-key}
+        read-timeout: 15s
         options:
           model: gpt-4o-mini
       embedding:
@@ -32,4 +33,4 @@ spring:
 
 app:
   query:
-    top-k: 5        
+    top-k: 5
