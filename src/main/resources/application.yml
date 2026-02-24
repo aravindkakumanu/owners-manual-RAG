@@ -6,14 +6,17 @@ spring:
     openai:
         api-key: ${OPENAI_API_KEY}
 
+        read-timeout: 30s
+
         chat:
           # Default empty (:) so when GROQ_* are unset we get "" and @NotBlank fails fast with a clear message
           api-key: ${GROQ_API_KEY:}
           base-url: https://api.groq.com/openai 
+          read-timeout: 30s
           options:
             model: ${GROQ_MODEL:}  
             max-tokens: 1024
-            temperature: 0.1
+            temperature: 0.1  # Lower = more deterministic
             
         embedding:
           api-key: ${OPENAI_API_KEY:}

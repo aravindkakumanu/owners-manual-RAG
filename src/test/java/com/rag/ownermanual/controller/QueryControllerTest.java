@@ -2,6 +2,8 @@ package com.rag.ownermanual.controller;
 
 import com.rag.ownermanual.dto.query.Citation;
 import com.rag.ownermanual.dto.query.QueryResponse;
+import com.rag.ownermanual.exception.DownstreamLlmException;
+import com.rag.ownermanual.exception.DownstreamVectorStoreException;
 import com.rag.ownermanual.service.QueryService;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
@@ -112,5 +114,43 @@ class QueryControllerTest {
                 .andExpect(status().isBadRequest())
                 .andExpect(jsonPath("$.status").value(400))
                 .andExpect(jsonPath("$.fieldErrors[*].field", hasItem("text")));
+    }
+
+    @Test
+    @DisplayName("Vector store failure returns 503 with safe error body (no stack trace)")
+    void vectorStoreFailure_returns503WithSafeBody() throws Exception {
+        when(queryService.query(eq("Brake warning light"), eq(null)))
+                .thenThrow(new DownstreamVectorStoreException("Qdrant timeout", new RuntimeException("timeout")));
+
+        ResultActions result = mockMvc.perform(post("/api/v1/query")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("{\"text\": \"Brake warning light\"}"));
+
+        result.andExpect(status().isServiceUnavailable())
+                .andExpect(content().contentType(MediaType.APPLICATION_JSON))
+                .andExpect(jsonPath("$.status").value(503))
+                .andExpect(jsonPath("$.message").value("Search is temporarily unavailable. Please try again later."));
+
+        String body = result.andReturn().getResponse().getContentAsString();
+        assertThat(body).doesNotContain("at com.", "Exception", "Caused by");
+    }
+
+    @Test
+    @DisplayName("LLM failure returns 503 with safe error body (no stack trace)")
+    void llmFailure_returns503WithSafeBody() throws Exception {
+        when(queryService.query(eq("Engine noise at idle"), eq(null)))
+                .thenThrow(new DownstreamLlmException("LLM call failed", new RuntimeException("upstream 500")));
+
+        ResultActions result = mockMvc.perform(post("/api/v1/query")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("{\"text\": \"Engine noise at idle\"}"));
+
+        result.andExpect(status().isServiceUnavailable())
+                .andExpect(content().contentType(MediaType.APPLICATION_JSON))
+                .andExpect(jsonPath("$.status").value(503))
+                .andExpect(jsonPath("$.message").value("Answer could not be generated. Please try again later."));
+
+        String body = result.andReturn().getResponse().getContentAsString();
+        assertThat(body).doesNotContain("at com.", "Exception", "Caused by");
     }
 }
