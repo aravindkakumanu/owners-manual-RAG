@@ -17,9 +17,10 @@ spring:
       api-key: ${OPENAI_API_KEY:test-key}
       chat:
         api-key: ${GROQ_API_KEY:test-key}
+        base-url: https://api.groq.com/openai
         read-timeout: 15s
         options:
-          model: gpt-4o-mini
+          model: ${GROQ_MODEL:llama-3.1-8b-instant}
       embedding:
         api-key: ${OPENAI_API_KEY:test-key}
     vectorstore:
