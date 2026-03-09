@@ -164,4 +164,27 @@ class IngestionServiceTest {
         verify(vectorStoreRepository, never()).upsertChunks(any());
         verify(ingestionJobRepository).updateStatus(jobId, IngestionJobStatus.COMPLETED, null);
     }
+
+    @Test
+    void processJobAsync_delegatesToProcessJobPipeline() {
+        UUID jobId = UUID.randomUUID();
+        Instant now = Instant.now();
+        IngestionJob job = new IngestionJob(jobId, MANUAL_ID, IngestionJobStatus.CREATED, null, now, now);
+
+        when(ingestionJobRepository.findById(jobId)).thenReturn(Optional.of(job));
+        List<ParsedPage> pages = List.of(new ParsedPage(1, "Async page text", null));
+        when(documentParser.fetchAndParse(DOCUMENT_URL)).thenReturn(pages);
+        List<Chunk> chunks = List.of(
+                new Chunk(MANUAL_ID + "-p1-1", "Async page text", MANUAL_ID, MANUAL_ID, null, 1)
+        );
+        when(chunker.chunk(pages, MANUAL_ID, MANUAL_ID)).thenReturn(chunks);
+
+        ingestionService.processJobAsync(jobId, DOCUMENT_URL);
+
+        verify(ingestionJobRepository).updateStatus(jobId, IngestionJobStatus.PROCESSING, null);
+        verify(documentParser).fetchAndParse(DOCUMENT_URL);
+        verify(chunker).chunk(pages, MANUAL_ID, MANUAL_ID);
+        verify(vectorStoreRepository).upsertChunks(chunks);
+        verify(ingestionJobRepository).updateStatus(jobId, IngestionJobStatus.COMPLETED, null);
+    }
 }

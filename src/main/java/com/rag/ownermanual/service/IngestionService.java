@@ -10,6 +10,7 @@ import com.rag.ownermanual.repository.IngestionJobRepository;
 import com.rag.ownermanual.repository.VectorStoreRepository;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+import org.springframework.scheduling.annotation.Async;
 import org.springframework.stereotype.Service;
 
 import java.time.Instant;
@@ -101,5 +102,15 @@ public class IngestionService {
             String errorMessage = e.getMessage() != null ? e.getMessage() : e.getClass().getSimpleName();
             ingestionJobRepository.updateStatus(jobId, IngestionJobStatus.FAILED, errorMessage);
         }
+    }
+
+    /**
+     * Asynchronously run the ingestion pipeline for a job using Spring's @Async annotation.
+     * @param jobId       id of the job to process
+     * @param documentUrl URL of the document to fetch and parse
+     */
+    @Async("ingestionTaskExecutor")
+    public void processJobAsync(UUID jobId, String documentUrl) {
+        processJob(jobId, documentUrl);
     }
 }
