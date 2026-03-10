@@ -3,6 +3,7 @@ package com.rag.ownermanual.controller;
 import com.rag.ownermanual.dto.common.ApiErrorResponse;
 import com.rag.ownermanual.exception.DownstreamLlmException;
 import com.rag.ownermanual.exception.DownstreamVectorStoreException;
+import com.rag.ownermanual.exception.ResourceNotFoundException;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.http.HttpStatus;
@@ -25,6 +26,7 @@ public class GlobalExceptionHandler {
     private static final String VALIDATION_FAILED_MESSAGE = "Validation failed";
     private static final String SEARCH_UNAVAILABLE_MESSAGE = "Search is temporarily unavailable. Please try again later.";
     private static final String ANSWER_UNAVAILABLE_MESSAGE = "Answer could not be generated. Please try again later.";
+    private static final String RESOURCE_NOT_FOUND_MESSAGE = "Resource not found";
 
     /**
      * Handles Bean Validation failures when the request body fails.
@@ -74,5 +76,21 @@ public class GlobalExceptionHandler {
                 null
         );
         return ResponseEntity.status(HttpStatus.SERVICE_UNAVAILABLE).body(body);
+    }
+
+    /**
+     * Handles cases where a requested resource (such as an ingestion job) does not exist.
+     */
+    @ExceptionHandler(ResourceNotFoundException.class)
+    public ResponseEntity<ApiErrorResponse> handleResourceNotFound(ResourceNotFoundException ex) {
+        String message = ex.getMessage() != null ? ex.getMessage() : RESOURCE_NOT_FOUND_MESSAGE;
+        log.warn("Resource not found: {}", message);
+
+        ApiErrorResponse body = ApiErrorResponse.of(
+                HttpStatus.NOT_FOUND.value(),
+                message,
+                null
+        );
+        return ResponseEntity.status(HttpStatus.NOT_FOUND).body(body);
     }
 }

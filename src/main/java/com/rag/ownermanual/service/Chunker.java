@@ -2,7 +2,7 @@ package com.rag.ownermanual.service;
 
 import com.rag.ownermanual.domain.Chunk;
 import com.rag.ownermanual.domain.ParsedPage;
-
+import org.springframework.stereotype.Component;
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.List;
@@ -14,6 +14,7 @@ import java.util.Objects;
  *   <li>Splits each page's text into overlapping character-based chunks so embeddings stay within model limits.</li>
  *   <li>Assigns stable chunk identifiers so re-ingesting the same manual overwrites existing points in the vector store instead of duplicating them.</li>
  */
+@Component
 public class Chunker {
 
     /**
