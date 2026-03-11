@@ -72,6 +72,9 @@ public class QueryService {
      * @return QueryResponse with answer and citations.
      */
     public QueryResponse query(String queryText, String vehicleModel) {
+        log.info("Received query; starting retrieval and LLM call. queryPreview='{}', vehicleModel='{}', topK={}",
+                maskForLog(queryText), vehicleModel, queryProperties.getTopK());
+
         List<Chunk> chunks = searchChunks(queryText, vehicleModel);
 
         if (chunks == null || chunks.isEmpty()) {

@@ -83,6 +83,8 @@ public class IngestionService {
 
         ingestionJobRepository.updateStatus(jobId, IngestionJobStatus.PROCESSING, null);
 
+        log.info("Processing ingestion job id={} manualId={}", jobId, job.manualId());
+
         try {
             List<ParsedPage> pages = documentParser.fetchAndParse(documentUrl);
             // MVP: use manualId as vehicleModel for chunk metadata and query filtering.
@@ -97,6 +99,7 @@ public class IngestionService {
             }
 
             ingestionJobRepository.updateStatus(jobId, IngestionJobStatus.COMPLETED, null);
+            log.info("Completed ingestion job id={} manualId={} chunkCount={}", jobId, job.manualId(), chunks.size());
         } catch (Exception e) {
             log.error("Ingestion failed for job id={} manualId={}", jobId, job.manualId(), e);
             String errorMessage = e.getMessage() != null ? e.getMessage() : e.getClass().getSimpleName();

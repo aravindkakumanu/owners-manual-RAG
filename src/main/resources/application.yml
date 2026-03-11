@@ -16,7 +16,7 @@ spring:
           options:
             model: ${GROQ_MODEL:}  
             max-tokens: 1024
-            temperature: 0.1  # Lower = more deterministic
+            temperature: 0.1
             
         embedding:
           api-key: ${OPENAI_API_KEY:}
@@ -49,6 +49,9 @@ app:
   query:
     top-k: 5
     max-context-chars: 8000  # Cap total chunk text sent to LLM (context window)
+
+logging:
+  config: classpath:logback-spring.xml
 
 management:
   endpoints:
