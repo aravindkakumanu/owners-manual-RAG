@@ -5,6 +5,7 @@ import com.rag.ownermanual.domain.Chunk;
 import com.rag.ownermanual.dto.query.Citation;
 import com.rag.ownermanual.dto.query.QueryResponse;
 import com.rag.ownermanual.repository.VectorStoreRepository;
+import io.micrometer.core.instrument.simple.SimpleMeterRegistry;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
@@ -47,7 +48,12 @@ class QueryServiceTest {
         queryProperties = new QueryProperties();
         queryProperties.setTopK(5);
         queryProperties.setMaxContextChars(8_000);
-        queryService = new QueryService(vectorStoreRepository, queryProperties, ChatClient.builder(chatModel));
+        queryService = new QueryService(
+                vectorStoreRepository,
+                queryProperties,
+                ChatClient.builder(chatModel),
+                new SimpleMeterRegistry()
+        );
     }
 
     /** Service is a pass-through: returned list must be the same instance the repo returns. */
@@ -93,14 +99,18 @@ class QueryServiceTest {
     @Test
     void searchChunks_usesConfiguredTopK() {
         queryProperties.setTopK(10);
-        queryService = new QueryService(vectorStoreRepository, queryProperties, ChatClient.builder(chatModel));
+        queryService = new QueryService(
+                vectorStoreRepository,
+                queryProperties,
+                ChatClient.builder(chatModel),
+                new SimpleMeterRegistry()
+        );
         when(vectorStoreRepository.search(anyString(), isNull(), eq(10))).thenReturn(List.of());
 
         queryService.searchChunks("q", null);
 
         verify(vectorStoreRepository).search("q", null, 10);
     }
-
 
     /**
      * No chunks → short answer and empty citations; ChatClient must not be used (saves cost and avoids sending empty context).

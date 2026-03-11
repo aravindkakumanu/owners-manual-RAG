@@ -29,7 +29,7 @@ spring:
         host: ${QDRANT_URL:}  # localhost if using Qdrant locally
         port: 6334              # The gRPC port (default is 6334)
         api-key: ${QDRANT_API_KEY:} # required for Qdrant Cloud; can be empty for local
-        use-tls: true          # Set to true if using Qdrant Cloud
+        use-tls: ${QDRANT_USE_TLS:false} # Set to true if using Qdrant Cloud
         initialize-schema: true # Automatically creates the collection if it doesn't exist
         collection-name: owners_manual_rag
 
@@ -57,7 +57,7 @@ management:
   endpoints:
     web:
       exposure:
-        include: health
+        include: health, metrics
   endpoint:
     health:
       show-details: always
