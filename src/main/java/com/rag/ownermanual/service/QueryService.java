@@ -7,6 +7,7 @@ import com.rag.ownermanual.dto.query.QueryResponse;
 import com.rag.ownermanual.exception.DownstreamLlmException;
 import com.rag.ownermanual.exception.DownstreamVectorStoreException;
 import com.rag.ownermanual.repository.VectorStoreRepository;
+import com.rag.ownermanual.resilience.ResilienceService;
 import io.micrometer.core.instrument.Counter;
 import io.micrometer.core.instrument.MeterRegistry;
 import io.micrometer.core.instrument.Tags;
@@ -37,20 +38,25 @@ public class QueryService {
     private static final String EXCERPT_DELIMITER = "\n---\n";
 
     private static final String NO_CHUNKS_ANSWER = "No relevant sections found.";
+    private static final String DEGRADED_ANSWER_PREFIX =
+            "We could not generate a full answer right now. Here are relevant sections from the manual you can review:";
 
     private final VectorStoreRepository vectorStoreRepository;
     private final QueryProperties queryProperties;
     private final ChatClient chatClient;
+    private final ResilienceService resilienceService;
 
     private final MeterRegistry meterRegistry;
 
     public QueryService(VectorStoreRepository vectorStoreRepository,
                         QueryProperties queryProperties,
                         ChatClient.Builder chatClientBuilder,
+                        ResilienceService resilienceService,
                         MeterRegistry meterRegistry) {
         this.vectorStoreRepository = Objects.requireNonNull(vectorStoreRepository, "vectorStoreRepository");
         this.queryProperties = Objects.requireNonNull(queryProperties, "queryProperties");
         this.chatClient = Objects.requireNonNull(chatClientBuilder, "chatClientBuilder").build();
+        this.resilienceService = Objects.requireNonNull(resilienceService, "resilienceService");
         this.meterRegistry = Objects.requireNonNull(meterRegistry, "meterRegistry");
     }
 
@@ -120,11 +126,11 @@ public class QueryService {
         String answer;
         Timer.Sample llmSample = Timer.start(meterRegistry);
         try {
-            answer = chatClient.prompt()
+            answer = resilienceService.executeWithTimeLimit("llm", () -> chatClient.prompt()
                     .system(s -> s.text(SYSTEM_INSTRUCTION))
                     .user(userContent)
                     .call()
-                    .content();
+                    .content());
             llmSample.stop(Timer.builder("query.llm.latency")
                     .description("Latency of LLM calls from QueryService")
                     .tags(Tags.of(
@@ -138,10 +144,15 @@ public class QueryService {
                             "status", "error",
                             "vehicleModel", tagValue(normalizedModel)))
                     .register(meterRegistry));
-            log.error("LLM answer generation failed. query='{}', includedChunks={}.",
+
+            // Graceful degradation: retrieval succeeded but LLM failed (timeouts, circuit open, provider 5xx, etc.).
+            // We log the failure and return a degraded response that still carries citations so users can self-serve.
+        
+            log.error("LLM answer generation failed; returning degraded response with retrieved chunks. query='{}', includedChunks={}.",
                     maskForLog(queryText), included.size(), ex);
-            incrementQueryMetrics("error", normalizedModel, querySample);
-            throw new DownstreamLlmException("LLM answer generation failed", ex);
+            incrementQueryMetrics("degraded", normalizedModel, querySample);
+            List<Citation> degradedCitations = buildCitations(included);
+            return QueryResponse.of(DEGRADED_ANSWER_PREFIX, degradedCitations);
         }
 
         // Citations = one per chunk we sent to the LLM; enables "which sections supported this answer?"

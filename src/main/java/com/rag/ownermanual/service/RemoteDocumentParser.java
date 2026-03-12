@@ -2,6 +2,7 @@ package com.rag.ownermanual.service;
 
 import com.rag.ownermanual.domain.ParsedPage;
 import com.rag.ownermanual.exception.DocumentProcessingException;
+import com.rag.ownermanual.resilience.ResilienceService;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.ai.document.Document;
@@ -16,6 +17,7 @@ import org.springframework.web.client.RestClientException;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
+import java.util.function.Supplier;
 
 /**
  * Fetches a remote document and turns it into structured page content the chunker can consume.
@@ -26,9 +28,11 @@ public class RemoteDocumentParser {
     private static final Logger log = LoggerFactory.getLogger(RemoteDocumentParser.class);
 
     private final RestClient restClient;
+    private final ResilienceService resilienceService;
 
-    public RemoteDocumentParser(RestClient restClient) {
+    public RemoteDocumentParser(RestClient restClient, ResilienceService resilienceService) {
         this.restClient = restClient;
+        this.resilienceService = resilienceService;
     }
 
     /**
@@ -52,11 +56,13 @@ public class RemoteDocumentParser {
 
     private byte[] fetchPdfBytes(String documentUrl) {
         try {
-            byte[] body = restClient.get()
+            Supplier<byte[]> call = () -> restClient.get()
                     .uri(documentUrl)
                     .retrieve()
                     .body(byte[].class);
 
+            byte[] body = resilienceService.execute("documentFetch", call);
+        
             if (body == null || body.length == 0) {
                 String message = "Failed to fetch document: empty response body";
                 log.warn("{} url={}", message, maskUrlForLog(documentUrl));
