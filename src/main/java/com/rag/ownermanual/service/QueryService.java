@@ -38,6 +38,8 @@ public class QueryService {
     private static final String EXCERPT_DELIMITER = "\n---\n";
 
     private static final String NO_CHUNKS_ANSWER = "No relevant sections found.";
+    private static final String DEGRADED_ANSWER_PREFIX =
+            "We could not generate a full answer right now. Here are relevant sections from the manual you can review:";
 
     private final VectorStoreRepository vectorStoreRepository;
     private final QueryProperties queryProperties;
@@ -142,10 +144,15 @@ public class QueryService {
                             "status", "error",
                             "vehicleModel", tagValue(normalizedModel)))
                     .register(meterRegistry));
-            log.error("LLM answer generation failed. query='{}', includedChunks={}.",
+
+            // Graceful degradation: retrieval succeeded but LLM failed (timeouts, circuit open, provider 5xx, etc.).
+            // We log the failure and return a degraded response that still carries citations so users can self-serve.
+        
+            log.error("LLM answer generation failed; returning degraded response with retrieved chunks. query='{}', includedChunks={}.",
                     maskForLog(queryText), included.size(), ex);
-            incrementQueryMetrics("error", normalizedModel, querySample);
-            throw new DownstreamLlmException("LLM answer generation failed", ex);
+            incrementQueryMetrics("degraded", normalizedModel, querySample);
+            List<Citation> degradedCitations = buildCitations(included);
+            return QueryResponse.of(DEGRADED_ANSWER_PREFIX, degradedCitations);
         }
 
         // Citations = one per chunk we sent to the LLM; enables "which sections supported this answer?"

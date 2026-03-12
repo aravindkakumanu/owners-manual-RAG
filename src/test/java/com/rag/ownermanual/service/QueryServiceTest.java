@@ -167,4 +167,23 @@ class QueryServiceTest {
         assertThat(userContent).contains("Oil change every 5000 miles.");
         assertThat(userContent).contains("Check tire pressure monthly.");
     }
+
+    @Test
+    void query_whenLlmFails_returnsDegradedAnswerWithCitations() {
+        List<Chunk> chunks = List.of(
+                new Chunk("c1", "Oil change every 5000 miles.", "manual-1", "Model-X", "Maintenance", 10)
+        );
+        when(vectorStoreRepository.search(eq("How often oil change?"), isNull(), eq(5))).thenReturn(chunks);
+        when(resilienceService.executeWithTimeLimit(eq("llm"), any()))
+                .thenThrow(new RuntimeException("LLM timeout"));
+
+        QueryResponse response = queryService.query("How often oil change?", null);
+
+        assertThat(response.answer()).contains("We could not generate a full answer right now");
+        assertThat(response.citations()).hasSize(1);
+        Citation citation = response.citations().get(0);
+        assertThat(citation.chunkId()).isEqualTo("c1");
+        assertThat(citation.section()).isEqualTo("Maintenance");
+        assertThat(citation.page()).isEqualTo(10);
+    }
 }
