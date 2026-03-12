@@ -7,6 +7,7 @@ import com.rag.ownermanual.dto.query.QueryResponse;
 import com.rag.ownermanual.exception.DownstreamLlmException;
 import com.rag.ownermanual.exception.DownstreamVectorStoreException;
 import com.rag.ownermanual.repository.VectorStoreRepository;
+import com.rag.ownermanual.resilience.ResilienceService;
 import io.micrometer.core.instrument.Counter;
 import io.micrometer.core.instrument.MeterRegistry;
 import io.micrometer.core.instrument.Tags;
@@ -41,16 +42,19 @@ public class QueryService {
     private final VectorStoreRepository vectorStoreRepository;
     private final QueryProperties queryProperties;
     private final ChatClient chatClient;
+    private final ResilienceService resilienceService;
 
     private final MeterRegistry meterRegistry;
 
     public QueryService(VectorStoreRepository vectorStoreRepository,
                         QueryProperties queryProperties,
                         ChatClient.Builder chatClientBuilder,
+                        ResilienceService resilienceService,
                         MeterRegistry meterRegistry) {
         this.vectorStoreRepository = Objects.requireNonNull(vectorStoreRepository, "vectorStoreRepository");
         this.queryProperties = Objects.requireNonNull(queryProperties, "queryProperties");
         this.chatClient = Objects.requireNonNull(chatClientBuilder, "chatClientBuilder").build();
+        this.resilienceService = Objects.requireNonNull(resilienceService, "resilienceService");
         this.meterRegistry = Objects.requireNonNull(meterRegistry, "meterRegistry");
     }
 
@@ -120,11 +124,11 @@ public class QueryService {
         String answer;
         Timer.Sample llmSample = Timer.start(meterRegistry);
         try {
-            answer = chatClient.prompt()
+            answer = resilienceService.executeWithTimeLimit("llm", () -> chatClient.prompt()
                     .system(s -> s.text(SYSTEM_INSTRUCTION))
                     .user(userContent)
                     .call()
-                    .content();
+                    .content());
             llmSample.stop(Timer.builder("query.llm.latency")
                     .description("Latency of LLM calls from QueryService")
                     .tags(Tags.of(

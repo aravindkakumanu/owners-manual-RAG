@@ -61,3 +61,54 @@ management:
   endpoint:
     health:
       show-details: always
+
+resilience4j:
+  retry:
+    instances:
+      llm:
+        max-attempts: 1              # Default: no retry (LLM is expensive)
+        wait-duration: 250ms
+      vectorSearch:
+        max-attempts: 2              # 1 retry (transient network hiccup)
+        wait-duration: 150ms
+      vectorUpsert:
+        max-attempts: 3              # 2 retries (ingestion can tolerate more delay)
+        wait-duration: 250ms
+      documentFetch:
+        max-attempts: 2              # 1 retry fetching PDFs
+        wait-duration: 300ms
+  circuitbreaker:
+    instances:
+      llm:
+        sliding-window-type: COUNT_BASED
+        sliding-window-size: 20
+        minimum-number-of-calls: 10
+        failure-rate-threshold: 50
+        wait-duration-in-open-state: 30s
+        permitted-number-of-calls-in-half-open-state: 3
+      vectorSearch:
+        sliding-window-type: COUNT_BASED
+        sliding-window-size: 30
+        minimum-number-of-calls: 10
+        failure-rate-threshold: 50
+        wait-duration-in-open-state: 20s
+        permitted-number-of-calls-in-half-open-state: 3
+      vectorUpsert:
+        sliding-window-type: COUNT_BASED
+        sliding-window-size: 30
+        minimum-number-of-calls: 10
+        failure-rate-threshold: 50
+        wait-duration-in-open-state: 30s
+        permitted-number-of-calls-in-half-open-state: 3
+      documentFetch:
+        sliding-window-type: COUNT_BASED
+        sliding-window-size: 20
+        minimum-number-of-calls: 10
+        failure-rate-threshold: 50
+        wait-duration-in-open-state: 20s
+        permitted-number-of-calls-in-half-open-state: 3
+  timelimiter:
+    instances:
+      llm:
+        timeout-duration: 15s        # Upper bound for LLM call time from QueryService
+        cancel-running-future: true      

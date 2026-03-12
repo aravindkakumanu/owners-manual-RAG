@@ -5,6 +5,7 @@ import com.rag.ownermanual.domain.Chunk;
 import com.rag.ownermanual.dto.query.Citation;
 import com.rag.ownermanual.dto.query.QueryResponse;
 import com.rag.ownermanual.repository.VectorStoreRepository;
+import com.rag.ownermanual.resilience.ResilienceService;
 import io.micrometer.core.instrument.simple.SimpleMeterRegistry;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
@@ -40,6 +41,9 @@ class QueryServiceTest {
     @Mock
     private ChatModel chatModel;
 
+    @Mock
+    private ResilienceService resilienceService;
+
     private QueryProperties queryProperties;
     private QueryService queryService;
 
@@ -52,6 +56,7 @@ class QueryServiceTest {
                 vectorStoreRepository,
                 queryProperties,
                 ChatClient.builder(chatModel),
+                resilienceService,
                 new SimpleMeterRegistry()
         );
     }
@@ -103,6 +108,7 @@ class QueryServiceTest {
                 vectorStoreRepository,
                 queryProperties,
                 ChatClient.builder(chatModel),
+                resilienceService,
                 new SimpleMeterRegistry()
         );
         when(vectorStoreRepository.search(anyString(), isNull(), eq(10))).thenReturn(List.of());
@@ -140,6 +146,8 @@ class QueryServiceTest {
                 new Generation(new AssistantMessage("You should change the oil every 5000 miles."))
         ));
         when(chatModel.call(any(Prompt.class))).thenReturn(mockResponse);
+        when(resilienceService.executeWithTimeLimit(eq("llm"), any()))
+                .thenAnswer(invocation -> invocation.<java.util.function.Supplier<?>>getArgument(1).get());
 
         QueryResponse response = queryService.query("How often oil change?", null);
 

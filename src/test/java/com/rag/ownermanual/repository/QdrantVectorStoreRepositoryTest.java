@@ -1,6 +1,7 @@
 package com.rag.ownermanual.repository;
 
 import com.rag.ownermanual.domain.Chunk;
+import com.rag.ownermanual.resilience.ResilienceService;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.springframework.ai.document.Document;
@@ -13,27 +14,31 @@ import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
 import java.util.UUID;
+import java.util.function.Supplier;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.anyString;
+import static org.mockito.Mockito.mock;
+import static org.mockito.Mockito.when;
 
 /**
- * Unit tests for {@link QdrantVectorStoreRepository}: Chunk ↔ Document mapping,
+ * Unit tests for QdrantVectorStoreRepository: Chunk ↔ Document mapping,
  * search with optional vehicle_model filter, and upsert behavior.
- *
- * <p>Uses a manual {@link StubVectorStore} instead of Mockito so we can assert exact
- * {@link SearchRequest} shape and added documents without relying on the inline mock maker
- * (which can fail in some JDK/CI environments). The stub records the last search request
- * and all added documents for verification.
  */
 class QdrantVectorStoreRepositoryTest {
 
     private StubVectorStore stubVectorStore;
     private QdrantVectorStoreRepository repository;
+    private ResilienceService resilienceService;
 
     @BeforeEach
     void setUp() {
         stubVectorStore = new StubVectorStore();
-        repository = new QdrantVectorStoreRepository(stubVectorStore);
+        resilienceService = mock(ResilienceService.class);
+        when(resilienceService.execute(anyString(), any()))
+                .thenAnswer(invocation -> invocation.<Supplier<?>>getArgument(1).get());
+        repository = new QdrantVectorStoreRepository(stubVectorStore, resilienceService);
     }
 
     @Test
@@ -149,8 +154,8 @@ class QdrantVectorStoreRepositoryTest {
     }
 
     /**
-     * Stub VectorStore: records the last {@link SearchRequest} and all documents passed to
-     * {@link #add(List)} so tests can assert request shape (query, topK, filter) and
+     * Stub VectorStore: records the last SearchRequest and all documents passed to
+     * add(List) so tests can assert request shape (query, topK, filter) and
      * Chunk→Document mapping (id, text, metadata keys).
      */
     private static final class StubVectorStore implements VectorStore {

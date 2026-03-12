@@ -1,6 +1,7 @@
 package com.rag.ownermanual.repository;
 
 import com.rag.ownermanual.domain.Chunk;
+import com.rag.ownermanual.resilience.ResilienceService;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.ai.document.Document;
@@ -31,9 +32,11 @@ public class QdrantVectorStoreRepository implements VectorStoreRepository {
     private static final String META_PAGE = "page";
 
     private final VectorStore vectorStore;
+    private final ResilienceService resilienceService;
 
-    public QdrantVectorStoreRepository(VectorStore vectorStore) {
+    public QdrantVectorStoreRepository(VectorStore vectorStore, ResilienceService resilienceService) {
         this.vectorStore = vectorStore;
+        this.resilienceService = resilienceService;
     }
 
     /**
@@ -59,7 +62,8 @@ public class QdrantVectorStoreRepository implements VectorStoreRepository {
             requestBuilder.filterExpression(filter);
         }
 
-        List<Document> documents = vectorStore.similaritySearch(requestBuilder.build());
+        List<Document> documents = resilienceService.execute("vectorSearch",
+                () -> vectorStore.similaritySearch(requestBuilder.build()));
         return documents.stream()
                 .map(this::documentToChunk)
                 .toList();
@@ -78,7 +82,10 @@ public class QdrantVectorStoreRepository implements VectorStoreRepository {
         List<Document> documents = chunks.stream()
                 .map(this::chunkToDocument)
                 .toList();
-        vectorStore.add(documents);
+        resilienceService.execute("vectorUpsert", () -> {
+            vectorStore.add(documents);
+            return null;
+        });
         log.debug("Upserted {} chunks to vector store", documents.size());
     }
 
