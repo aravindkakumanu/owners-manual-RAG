@@ -9,6 +9,7 @@ import com.rag.ownermanual.dto.ingest.IngestResponse;
 import com.rag.ownermanual.exception.DocumentProcessingException;
 import com.rag.ownermanual.repository.IngestionJobRepository;
 import com.rag.ownermanual.repository.VectorStoreRepository;
+import io.micrometer.core.instrument.simple.SimpleMeterRegistry;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
@@ -54,7 +55,8 @@ class IngestionServiceTest {
                 ingestionJobRepository,
                 documentParser,
                 chunker,
-                vectorStoreRepository
+                vectorStoreRepository,
+                new SimpleMeterRegistry()
         );
     }
 

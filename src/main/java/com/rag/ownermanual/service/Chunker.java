@@ -2,7 +2,10 @@ package com.rag.ownermanual.service;
 
 import com.rag.ownermanual.domain.Chunk;
 import com.rag.ownermanual.domain.ParsedPage;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import org.springframework.stereotype.Component;
+
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.List;
@@ -10,12 +13,16 @@ import java.util.Objects;
 
 /**
  * Turns parsed manual pages into Chunk instances suitable for storage in the vector store.
+ * <ul>
  *   <li>Takes the parser output (ParsedPage list) plus manualId and vehicleModel.</li>
  *   <li>Splits each page's text into overlapping character-based chunks so embeddings stay within model limits.</li>
  *   <li>Assigns stable chunk identifiers so re-ingesting the same manual overwrites existing points in the vector store instead of duplicating them.</li>
+ * </ul>
  */
 @Component
 public class Chunker {
+
+    private static final Logger log = LoggerFactory.getLogger(Chunker.class);
 
     /**
      * Default maximum characters per chunk.
@@ -51,18 +58,6 @@ public class Chunker {
 
     /**
      * Create chunks from parsed pages for a given manual and vehicle model.
-     *
-     * <p><b>Contract:</b></p>
-     * <ul>
-     *   <li>pages may be null or empty → returns an empty, unmodifiable list.</li>
-     *   <li>manualId and vehicleModel must be non-blank; they are copied to every chunk
-     *       and also used when building the chunk id.</li>
-     *   <li>Each non-empty page produces one or more chunks, preserving the original page order.</li>
-     *   <li>For pages with an unknown page number, a deterministic synthetic page index is used in the
-     *       chunk id so re-ingestion remains stable. The page field on the chunk stays null
-     *       in that case to avoid claiming a page number we do not know.</li>
-     * </ul>
-     *
      * @param pages        parsed pages from the document parser
      * @param manualId     identifier of the manual being ingested
      * @param vehicleModel vehicle/model this manual applies to
@@ -105,7 +100,9 @@ public class Chunker {
             createChunksForPage(result, text, page.section(), pageNumber, effectivePage, manualId, vehicleModel);
         }
 
-        return Collections.unmodifiableList(result);
+        List<Chunk> unmodifiable = Collections.unmodifiableList(result);
+        log.info("Chunked parsed pages into {} chunk(s) for manualId={} vehicleModel={}", unmodifiable.size(), manualId, vehicleModel);
+        return unmodifiable;
     }
 
     private void createChunksForPage(List<Chunk> target,
@@ -154,3 +151,4 @@ public class Chunker {
         return manualId + "-p" + pageNumber + "-" + indexWithinPage;
     }
 }
+

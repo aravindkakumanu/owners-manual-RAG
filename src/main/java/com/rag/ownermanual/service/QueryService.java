@@ -7,6 +7,10 @@ import com.rag.ownermanual.dto.query.QueryResponse;
 import com.rag.ownermanual.exception.DownstreamLlmException;
 import com.rag.ownermanual.exception.DownstreamVectorStoreException;
 import com.rag.ownermanual.repository.VectorStoreRepository;
+import io.micrometer.core.instrument.Counter;
+import io.micrometer.core.instrument.MeterRegistry;
+import io.micrometer.core.instrument.Tags;
+import io.micrometer.core.instrument.Timer;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.ai.chat.client.ChatClient;
@@ -38,12 +42,16 @@ public class QueryService {
     private final QueryProperties queryProperties;
     private final ChatClient chatClient;
 
+    private final MeterRegistry meterRegistry;
+
     public QueryService(VectorStoreRepository vectorStoreRepository,
                         QueryProperties queryProperties,
-                        ChatClient.Builder chatClientBuilder) {
+                        ChatClient.Builder chatClientBuilder,
+                        MeterRegistry meterRegistry) {
         this.vectorStoreRepository = Objects.requireNonNull(vectorStoreRepository, "vectorStoreRepository");
         this.queryProperties = Objects.requireNonNull(queryProperties, "queryProperties");
         this.chatClient = Objects.requireNonNull(chatClientBuilder, "chatClientBuilder").build();
+        this.meterRegistry = Objects.requireNonNull(meterRegistry, "meterRegistry");
     }
 
     /**
@@ -56,9 +64,24 @@ public class QueryService {
         // Normalize blank to null so the repository contract is clear: null/blank = no filter.
         String normalizedModel = (vehicleModel != null && !vehicleModel.isBlank()) ? vehicleModel : null;
         int topK = queryProperties.getTopK();
+
+        Timer.Sample sample = Timer.start(meterRegistry);
         try {
-            return vectorStoreRepository.search(queryText, normalizedModel, topK);
+            List<Chunk> result = vectorStoreRepository.search(queryText, normalizedModel, topK);
+            sample.stop(Timer.builder("query.vector.search.latency")
+                    .description("Latency of vector store search calls from QueryService")
+                    .tags(Tags.of(
+                            "status", "success",
+                            "vehicleModel", tagValue(normalizedModel)))
+                    .register(meterRegistry));
+            return result;
         } catch (RuntimeException ex) {
+            sample.stop(Timer.builder("query.vector.search.latency")
+                    .description("Latency of vector store search calls from QueryService")
+                    .tags(Tags.of(
+                            "status", "error",
+                            "vehicleModel", tagValue(normalizedModel)))
+                    .register(meterRegistry));
             log.error("Vector store search failed. query='{}', vehicleModel='{}'.",
                     maskForLog(queryText), normalizedModel, ex);
             throw new DownstreamVectorStoreException("Vector store search failed", ex);
@@ -72,10 +95,17 @@ public class QueryService {
      * @return QueryResponse with answer and citations.
      */
     public QueryResponse query(String queryText, String vehicleModel) {
-        List<Chunk> chunks = searchChunks(queryText, vehicleModel);
+        String normalizedModel = (vehicleModel != null && !vehicleModel.isBlank()) ? vehicleModel : null;
+        Timer.Sample querySample = Timer.start(meterRegistry);
+
+        log.info("Received query; starting retrieval and LLM call. queryPreview='{}', vehicleModel='{}', topK={}",
+                maskForLog(queryText), vehicleModel, queryProperties.getTopK());
+
+        List<Chunk> chunks = searchChunks(queryText, normalizedModel);
 
         if (chunks == null || chunks.isEmpty()) {
             log.debug("Query returned no chunks; returning no-relevant-sections message. query={}", maskForLog(queryText));
+            incrementQueryMetrics("no_chunks", normalizedModel, querySample);
             return QueryResponse.of(NO_CHUNKS_ANSWER, null);
         }
 
@@ -88,15 +118,29 @@ public class QueryService {
         String userContent = buildUserMessage(queryText, included);
 
         String answer;
+        Timer.Sample llmSample = Timer.start(meterRegistry);
         try {
             answer = chatClient.prompt()
                     .system(s -> s.text(SYSTEM_INSTRUCTION))
                     .user(userContent)
                     .call()
                     .content();
+            llmSample.stop(Timer.builder("query.llm.latency")
+                    .description("Latency of LLM calls from QueryService")
+                    .tags(Tags.of(
+                            "status", "success",
+                            "vehicleModel", tagValue(normalizedModel)))
+                    .register(meterRegistry));
         } catch (RuntimeException ex) {
+            llmSample.stop(Timer.builder("query.llm.latency")
+                    .description("Latency of LLM calls from QueryService")
+                    .tags(Tags.of(
+                            "status", "error",
+                            "vehicleModel", tagValue(normalizedModel)))
+                    .register(meterRegistry));
             log.error("LLM answer generation failed. query='{}', includedChunks={}.",
                     maskForLog(queryText), included.size(), ex);
+            incrementQueryMetrics("error", normalizedModel, querySample);
             throw new DownstreamLlmException("LLM answer generation failed", ex);
         }
 
@@ -104,6 +148,7 @@ public class QueryService {
         List<Citation> citations = buildCitations(included);
         log.info("Citations returned: {} (from {} chunks).", citations.size(), included.size());
 
+        incrementQueryMetrics("success", normalizedModel, querySample);
         return QueryResponse.of(answer != null && !answer.isBlank() ? answer : "", citations);
     }
 
@@ -147,6 +192,34 @@ public class QueryService {
         if (text == null) return null;
         if (text.length() <= maxLen) return text;
         return text.substring(0, maxLen) + "...";
+    }
+
+    private void incrementQueryMetrics(String status, String vehicleModel, Timer.Sample sample) {
+        Tags tags = Tags.of(
+                "status", status,
+                "vehicleModel", tagValue(vehicleModel)
+        );
+        Counter.builder("query.requests")
+                .description("Total query requests handled by QueryService")
+                .tags(tags)
+                .register(meterRegistry)
+                .increment();
+        sample.stop(Timer.builder("query.latency")
+                .description("End-to-end latency for QueryService.query")
+                .tags(tags)
+                .register(meterRegistry));
+
+        if (!"no_chunks".equals(status)) {
+            Counter.builder("query.llm.calls")
+                    .description("Total LLM calls initiated by QueryService")
+                    .tags(tags)
+                    .register(meterRegistry)
+                    .increment();
+        }
+    }
+
+    private static String tagValue(String value) {
+        return (value == null || value.isBlank()) ? "unknown" : value;
     }
 
     /**

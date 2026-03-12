@@ -8,6 +8,10 @@ import com.rag.ownermanual.dto.ingest.IngestRequest;
 import com.rag.ownermanual.dto.ingest.IngestResponse;
 import com.rag.ownermanual.repository.IngestionJobRepository;
 import com.rag.ownermanual.repository.VectorStoreRepository;
+import io.micrometer.core.instrument.Counter;
+import io.micrometer.core.instrument.MeterRegistry;
+import io.micrometer.core.instrument.Tags;
+import io.micrometer.core.instrument.Timer;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.scheduling.annotation.Async;
@@ -31,14 +35,18 @@ public class IngestionService {
     private final Chunker chunker;
     private final VectorStoreRepository vectorStoreRepository;
 
+    private final MeterRegistry meterRegistry;
+
     public IngestionService(IngestionJobRepository ingestionJobRepository,
                             RemoteDocumentParser documentParser,
                             Chunker chunker,
-                            VectorStoreRepository vectorStoreRepository) {
+                            VectorStoreRepository vectorStoreRepository,
+                            MeterRegistry meterRegistry) {
         this.ingestionJobRepository = Objects.requireNonNull(ingestionJobRepository, "ingestionJobRepository");
         this.documentParser = Objects.requireNonNull(documentParser, "documentParser");
         this.chunker = Objects.requireNonNull(chunker, "chunker");
         this.vectorStoreRepository = Objects.requireNonNull(vectorStoreRepository, "vectorStoreRepository");
+        this.meterRegistry = Objects.requireNonNull(meterRegistry, "meterRegistry");
     }
 
     /**
@@ -59,6 +67,13 @@ public class IngestionService {
         );
         ingestionJobRepository.save(job);
         log.info("Created ingestion job id={} manualId={}", jobId, request.manualId());
+
+        Counter.builder("ingest.jobs.started")
+                .description("Number of ingestion jobs started")
+                .tags(Tags.of("vehicleModel", tagValue(request.manualId())))
+                .register(meterRegistry)
+                .increment();
+
         return new IngestResponse(jobId);
     }
 
@@ -83,24 +98,39 @@ public class IngestionService {
 
         ingestionJobRepository.updateStatus(jobId, IngestionJobStatus.PROCESSING, null);
 
+        log.info("Processing ingestion job id={} manualId={}", jobId, job.manualId());
+
+        Timer.Sample jobSample = Timer.start(meterRegistry);
+        String vehicleModel = job.manualId();
+
         try {
             List<ParsedPage> pages = documentParser.fetchAndParse(documentUrl);
             // MVP: use manualId as vehicleModel for chunk metadata and query filtering.
-            String vehicleModel = job.manualId();
             List<Chunk> chunks = chunker.chunk(pages, job.manualId(), vehicleModel);
 
             if (!chunks.isEmpty()) {
                 vectorStoreRepository.upsertChunks(chunks);
                 log.info("Upserted {} chunk(s) for job id={} manualId={}", chunks.size(), jobId, job.manualId());
+
+                Counter.builder("ingest.chunks.processed")
+                        .description("Total chunks processed during ingestion")
+                        .tags(Tags.of("vehicleModel", tagValue(vehicleModel)))
+                        .register(meterRegistry)
+                        .increment(chunks.size());
             } else {
                 log.info("No chunks produced for job id={} manualId={} (empty or blank pages)", jobId, job.manualId());
             }
 
             ingestionJobRepository.updateStatus(jobId, IngestionJobStatus.COMPLETED, null);
+            log.info("Completed ingestion job id={} manualId={} chunkCount={}", jobId, job.manualId(), chunks.size());
+
+            recordJobDuration(jobSample, "completed", vehicleModel, null);
         } catch (Exception e) {
             log.error("Ingestion failed for job id={} manualId={}", jobId, job.manualId(), e);
             String errorMessage = e.getMessage() != null ? e.getMessage() : e.getClass().getSimpleName();
             ingestionJobRepository.updateStatus(jobId, IngestionJobStatus.FAILED, errorMessage);
+
+            recordJobDuration(jobSample, "failed", vehicleModel, e);
         }
     }
 
@@ -112,5 +142,43 @@ public class IngestionService {
     @Async("ingestionTaskExecutor")
     public void processJobAsync(UUID jobId, String documentUrl) {
         processJob(jobId, documentUrl);
+    }
+
+    private void recordJobDuration(Timer.Sample sample, String status, String vehicleModel, Exception error) {
+        Tags baseTags = Tags.of(
+                "status", status,
+                "vehicleModel", tagValue(vehicleModel)
+        );
+
+        if ("completed".equals(status)) {
+            Counter.builder("ingest.jobs.completed")
+                    .description("Number of ingestion jobs completed successfully")
+                    .tags(baseTags)
+                    .register(meterRegistry)
+                    .increment();
+
+            sample.stop(Timer.builder("ingest.jobs.duration")
+                    .description("Duration of ingestion jobs from PROCESSING to terminal state")
+                    .tags(baseTags)
+                    .register(meterRegistry));
+        } else {
+            String errorType = error != null ? error.getClass().getSimpleName() : "Unknown";
+            Tags failedTags = baseTags.and("errorType", errorType);
+
+            Counter.builder("ingest.jobs.failed")
+                    .description("Number of ingestion jobs that failed")
+                    .tags(failedTags)
+                    .register(meterRegistry)
+                    .increment();
+
+            sample.stop(Timer.builder("ingest.jobs.duration")
+                    .description("Duration of ingestion jobs from PROCESSING to terminal state")
+                    .tags(failedTags)
+                    .register(meterRegistry));
+        }
+    }
+
+    private static String tagValue(String value) {
+        return (value == null || value.isBlank()) ? "unknown" : value;
     }
 }
