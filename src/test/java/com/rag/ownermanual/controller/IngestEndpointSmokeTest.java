@@ -42,6 +42,8 @@ import static org.mockito.Mockito.when;
 @Import({ GlobalExceptionHandler.class, TestVectorStoreConfig.class })
 class IngestEndpointSmokeTest {
 
+    private static final String TEST_API_KEY = "test-api-key";
+
     @Autowired
     private TestRestTemplate restTemplate;
 
@@ -59,6 +61,7 @@ class IngestEndpointSmokeTest {
 
         HttpHeaders headers = new HttpHeaders();
         headers.setContentType(MediaType.APPLICATION_JSON);
+        headers.set("X-Api-Key", TEST_API_KEY);
         String body = """
                 {"manualId":"manual-123","documentUrl":"https://example.com/manual.pdf"}
                 """;
@@ -89,10 +92,12 @@ class IngestEndpointSmokeTest {
         IngestionJob job = new IngestionJob(jobId, "manual-123", IngestionJobStatus.PROCESSING, null, now, now);
         when(ingestionJobRepository.findById(jobId)).thenReturn(Optional.of(job));
 
+        HttpHeaders headers = new HttpHeaders();
+        headers.set("X-Api-Key", TEST_API_KEY);
         ResponseEntity<Map<String, Object>> response = restTemplate.exchange(
                 "/api/v1/jobs/" + jobId,
                 HttpMethod.GET,
-                HttpEntity.EMPTY,
+                new HttpEntity<>(headers),
                 new ParameterizedTypeReference<Map<String, Object>>() {}
         );
 
@@ -112,10 +117,12 @@ class IngestEndpointSmokeTest {
         UUID jobId = UUID.randomUUID();
         when(ingestionJobRepository.findById(jobId)).thenReturn(Optional.empty());
 
+        HttpHeaders headers = new HttpHeaders();
+        headers.set("X-Api-Key", TEST_API_KEY);
         ResponseEntity<Map<String, Object>> response = restTemplate.exchange(
                 "/api/v1/jobs/" + jobId,
                 HttpMethod.GET,
-                HttpEntity.EMPTY,
+                new HttpEntity<>(headers),
                 new ParameterizedTypeReference<Map<String, Object>>() {}
         );
 

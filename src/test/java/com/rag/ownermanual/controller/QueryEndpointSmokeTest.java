@@ -38,6 +38,8 @@ import static org.mockito.Mockito.when;
 @Import({ GlobalExceptionHandler.class, TestVectorStoreConfig.class })
 class QueryEndpointSmokeTest {
 
+    private static final String TEST_API_KEY = "test-api-key";
+
     @Autowired
     private TestRestTemplate restTemplate;
 
@@ -60,6 +62,7 @@ class QueryEndpointSmokeTest {
 
         HttpHeaders headers = new HttpHeaders();
         headers.setContentType(MediaType.APPLICATION_JSON);
+        headers.set("X-Api-Key", TEST_API_KEY);
         HttpEntity<String> entity = new HttpEntity<>("{\"text\": \"smoke question\"}", headers);
 
         ResponseEntity<Map<String, Object>> response = restTemplate.exchange(

@@ -32,6 +32,8 @@ import static org.assertj.core.api.Assertions.assertThat;
 @EnabledIfEnvironmentVariable(named = "GROQ_API_KEY", matches = ".+")
 class QueryApiIntegrationTest {
 
+    private static final String TEST_API_KEY = "test-api-key";
+
     @Autowired
     private TestRestTemplate restTemplate;
 
@@ -59,6 +61,7 @@ class QueryApiIntegrationTest {
 
         HttpHeaders headers = new HttpHeaders();
         headers.setContentType(MediaType.APPLICATION_JSON);
+        headers.set("X-Api-Key", TEST_API_KEY);
         HttpEntity<String> entity = new HttpEntity<>(requestBody, headers);
 
         ResponseEntity<Map<String, Object>> response = restTemplate.exchange(
