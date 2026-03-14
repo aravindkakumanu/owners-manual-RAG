@@ -50,6 +50,13 @@ app:
     top-k: 5
     max-context-chars: 8000  # Cap total chunk text sent to LLM (context window)
 
+  security:
+    api-key: ${APP_API_KEY:}
+    rate-limiting:
+      capacity: 60
+      refill-tokens: 60
+      refill-period-seconds: 60 
+
 logging:
   config: classpath:logback-spring.xml
 
