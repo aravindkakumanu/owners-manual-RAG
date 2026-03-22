@@ -46,6 +46,7 @@ class IngestToQueryE2EIntegrationTest {
     private static final String MANUAL_ID = "e2e-manual-001";
     private static final Duration POLL_TIMEOUT = Duration.ofSeconds(60);
     private static final Duration POLL_INTERVAL = Duration.ofSeconds(2);
+    private static final String TEST_API_KEY = "test-api-key";
 
     @LocalServerPort
     private int port;
@@ -70,6 +71,7 @@ class IngestToQueryE2EIntegrationTest {
 
         HttpHeaders headers = new HttpHeaders();
         headers.setContentType(MediaType.APPLICATION_JSON);
+        headers.set("X-Api-Key", TEST_API_KEY);
         HttpEntity<String> entity = new HttpEntity<>(requestBody, headers);
 
         ResponseEntity<Map<String, Object>> response = restTemplate.exchange(
@@ -107,6 +109,7 @@ class IngestToQueryE2EIntegrationTest {
     private UUID startIngestion(String manualId, String documentUrl) {
         HttpHeaders headers = new HttpHeaders();
         headers.setContentType(MediaType.APPLICATION_JSON);
+        headers.set("X-Api-Key", TEST_API_KEY);
         String body = """
                 {"manualId":"%s","documentUrl":"%s"}
                 """.formatted(manualId, documentUrl);
@@ -132,11 +135,14 @@ class IngestToQueryE2EIntegrationTest {
     private Map<String, Object> waitForTerminalJobState(UUID jobId) {
         long deadline = System.nanoTime() + POLL_TIMEOUT.toNanos();
 
+        HttpHeaders jobPollHeaders = new HttpHeaders();
+        jobPollHeaders.set("X-Api-Key", TEST_API_KEY);
+
         while (System.nanoTime() < deadline) {
             ResponseEntity<Map<String, Object>> response = restTemplate.exchange(
                     "/api/v1/jobs/" + jobId,
                     HttpMethod.GET,
-                    HttpEntity.EMPTY,
+                    new HttpEntity<>(jobPollHeaders),
                     new ParameterizedTypeReference<Map<String, Object>>() {}
             );
 
